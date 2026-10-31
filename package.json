@@ -1,0 +1,11 @@
+{
+  "name": "tumble-grove",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tumble Grove - a pixel-art forest New Tab page with rolling sloths (Chrome extension).",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/",
+    "build:assets": "python3 tools/build_assets.py"
+  }
+}

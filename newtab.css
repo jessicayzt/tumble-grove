@@ -1,0 +1,181 @@
+:root {
+  --sky: #222200;
+  --bark-dark: #3e2a14;
+  --bark: #6b4423;
+  --bark-light: #8b5a2b;
+  --bark-highlight: #b07a45;
+  --cream: #f3e4c8;
+  --hud-height: 50px;   /* shared by the meter panel and the square reset button */
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sky);
+  font-family: ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  color: var(--cream);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+}
+
+#bg { z-index: 0; }
+#fg { z-index: 1; cursor: crosshair; }
+
+/* ---------- HUD: reset button + Sloth-o-meter ---------- */
+
+.hud {
+  position: fixed;
+  z-index: 2;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  cursor: default;
+}
+
+/* Shared wooden panel look: chunky bevel, light top-left, dark bottom-right. */
+.hud__button,
+.meter {
+  box-sizing: border-box;
+  height: var(--hud-height);
+  background: var(--bark);
+  border: 3px solid var(--bark-dark);
+  border-radius: 6px;
+  color: var(--cream);
+  box-shadow:
+    inset 2px 2px 0 var(--bark-light),
+    inset -2px -2px 0 var(--bark-dark),
+    0 4px 0 var(--bark-dark),
+    0 8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.hud__button {
+  width: var(--hud-height);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hud__button:hover { background: var(--bark-light); }
+
+.hud__button:active {
+  background: var(--bark-dark);
+  transform: translateY(2px);
+  box-shadow:
+    inset 2px 2px 0 var(--bark-dark),
+    inset -2px -2px 0 var(--bark-light),
+    0 2px 0 var(--bark-dark),
+    0 6px 14px rgba(0, 0, 0, 0.45);
+}
+
+.hud__button:focus-visible {
+  outline: 2px solid var(--cream);
+  outline-offset: 2px;
+}
+
+.hud__button-icon {
+  display: block;
+  filter: drop-shadow(1px 1px 0 var(--bark-dark));
+}
+
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+}
+
+.meter__icon {
+  flex: none;
+  /* The 112px sprite is shown small: smooth scaling keeps the face readable. */
+  image-rendering: auto;
+}
+
+.meter__label {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow: 1px 1px 0 var(--bark-dark);
+  white-space: nowrap;
+}
+
+.meter__value {
+  min-width: 2ch;
+  text-align: right;
+  font-weight: 700;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 1px 1px 0 var(--bark-dark);
+}
+
+/* ---------- slider ----------
+   Chrome lays the thumb out at the top of the track's content box, so it is
+   centred with margin-top = (track content height - thumb height) / 2. */
+
+.meter__slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 160px;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.meter__slider:focus { outline: none; }
+
+.meter__slider::-webkit-slider-runnable-track {
+  box-sizing: border-box;
+  height: 14px;               /* 10px bar inside 2px borders */
+  border: 2px solid #2a1b0c;
+  border-radius: 3px;
+  background: var(--bark-dark);
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.meter__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  width: 18px;
+  height: 22px;
+  margin-top: -6px;           /* (10px - 22px) / 2 */
+  background: var(--bark-light);
+  border: 2px solid var(--bark-dark);
+  border-radius: 3px;
+  box-shadow:
+    inset 2px 2px 0 var(--bark-highlight),
+    inset -2px -2px 0 var(--bark);
+}
+
+.meter__slider:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--cream);
+  outline-offset: 1px;
+}
+
+.meter__slider:active::-webkit-slider-thumb {
+  background: var(--bark-highlight);
+}
+
+/* Give the HUD a touch more room on narrow windows. */
+@media (max-width: 560px) {
+  .hud { right: 8px; top: 8px; gap: 8px; }
+  .meter { gap: 8px; padding: 0 10px; }
+  .meter__slider { width: 110px; }
+  .meter__label { font-size: 11px; }
+}
