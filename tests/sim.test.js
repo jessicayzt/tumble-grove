@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   computeWorld, createSloth, resetSloth, stepSloth, slothSize, slothSizeArt, slothRect,
   sortForDraw, createLeaf, stepLeaf, eatLeaves, trimLeaves, rescaleSloth,
-  rescaleLeaf, spawnParticles, stepParticles, slothFrame,
+  rescaleLeaf, spawnParticles, stepParticles, slothFrame, jumpSloth, hitTestSloth,
+  isAirborne,
 } from '../js/sim.js';
 import { SLOTH, SCENE, LEAF } from '../js/config.js';
 
@@ -210,11 +211,100 @@ test('particles fly, fall under gravity, and expire', () => {
 
 test('sprite frame count in config matches the generated sprite sheet manifest', async () => {
   const { readFile } = await import('node:fs/promises');
-  const manifest = JSON.parse(await readFile(new URL('../img/manifest.json', import.meta.url), 'utf8'));
+  const manifest = JSON.parse(await readFile(new URL('../img/assets.json', import.meta.url), 'utf8'));
   assert.equal(manifest.sloth.frames, SLOTH.frames);
   assert.equal(manifest.sloth.frameWidth * manifest.sloth.frames, 2688);
   const s = createSloth({ id: 'f', eaten: 0 }, computeWorld(800, 600), { rng: seq(0.5, 0.999, 0.5), frames: manifest.sloth.frames });
   assert.ok(slothFrame(s) < manifest.sloth.frames);
+});
+
+test('a poked sloth hops in a parabola with its frame frozen, then rolls on', () => {
+  const world = computeWorld(1600, 900);
+  const s = createSloth({ id: 'hop', eaten: 0 }, world, { rng: seq(0.9, 0.3, 0.5) });
+  s.x = 800; s.dir = 1;
+  const frame = slothFrame(s);
+  const groundY = slothRect(s, world).y;
+  assert.equal(isAirborne(s), false);
+
+  jumpSloth(s, world);
+  assert.ok(isAirborne(s));
+  let peak = 0; let lastLift = 0; let rising = true; let sawDescent = false;
+  for (let i = 0; i < 400 && isAirborne(s); i++) {
+    stepSloth(s, 1 / 60, world);
+    assert.equal(slothFrame(s), frame, 'frame stays frozen while airborne');
+    if (s.lift < lastLift) { rising = false; sawDescent = true; }
+    else if (!rising) assert.fail('lift went back up without a new poke');
+    lastLift = s.lift;
+    peak = Math.max(peak, s.lift);
+  }
+  assert.equal(isAirborne(s), false, 'lands again');
+  assert.ok(sawDescent);
+  const expected = (SLOTH.jumpHeightBase + SLOTH.jumpHeightPerSize * slothSizeArt(0)) * world.scale;
+  assert.ok(Math.abs(peak - expected) / expected < 0.08, `peak ${peak} vs ${expected}`);
+  assert.equal(slothRect(s, world).y, groundY, 'back on the ground line');
+  assert.ok(s.x > 800, 'kept moving forward during the hop');
+
+  const before = s.frameTime;
+  stepSloth(s, 0.1, world);
+  assert.notEqual(s.frameTime, before, 'animation resumes after landing');
+});
+
+test('an airborne sloth bounces off the edge of the page', () => {
+  const world = computeWorld(600, 500);
+  const s = createSloth({ id: 'bounce', eaten: 0 }, world, { rng: seq(0.9, 0.3, 0.5) });
+  const size = slothSize(0, world);
+  s.x = world.w - size - 1; s.dir = 1;
+  jumpSloth(s, world);
+  stepSloth(s, 0.1, world); // covers more than 1px in the air, so it reaches the edge
+  assert.ok(isAirborne(s), 'still in the air');
+  assert.equal(s.dir, -1, 'turned around at the edge');
+  assert.equal(s.x, world.w - size);
+});
+
+test('a sloth already in the air cannot be launched again and is skipped by the hit test', () => {
+  const world = computeWorld(800, 600);
+  const s = createSloth({ id: 'again', eaten: 0 }, world, { rng: seq(0.5, 0.3, 0.5) });
+  s.x = 300;
+  assert.equal(jumpSloth(s, world), true);
+  for (let i = 0; i < 20; i++) stepSloth(s, 1 / 60, world);
+  const { vLift, lift } = s;
+  assert.equal(jumpSloth(s, world), false, 'no relaunch mid-air');
+  assert.equal(s.vLift, vLift);
+  assert.equal(s.lift, lift);
+  const r = slothRect(s, world);
+  assert.equal(hitTestSloth([s], r.x + r.size / 2, r.y + r.size / 2, world), null,
+    'a click on an airborne sloth falls through (to a leaf)');
+  const behind = createSloth({ id: 'behind', eaten: 10 }, world, { rng: seq(0.5, 0.3, 0.5) });
+  behind.x = r.x - 10;
+  assert.equal(hitTestSloth([s, behind], r.x + r.size / 2, world.groundLine - 5, world), behind,
+    'a grounded sloth behind it can still be poked');
+});
+
+test('hit test finds the front-most sloth under the pointer', () => {
+  const world = computeWorld(1000, 800);
+  const big = createSloth({ id: 'big', eaten: 40 }, world, { rng: seq(0.5, 0.3, 0.5) });
+  const small = createSloth({ id: 'small', eaten: 0 }, world, { rng: seq(0.5, 0.3, 0.5) });
+  big.x = 300; small.x = 320;
+  const r = slothRect(small, world);
+  assert.equal(hitTestSloth([big, small], r.x + r.size / 2, r.y + r.size / 2, world), small);
+  const rb = slothRect(big, world);
+  assert.equal(hitTestSloth([big, small], rb.x + 5, rb.y + 5, world), big, 'big where small is not');
+  assert.equal(hitTestSloth([big, small], 10, 10, world), null);
+  assert.equal(hitTestSloth([], 300, world.groundLine - 5, world), null);
+});
+
+test('a hopping sloth eats where it is, not where it was', () => {
+  const world = computeWorld(1000, 800);
+  const s = createSloth({ id: 'air', eaten: 0 }, world, { rng: seq(0.5, 0.3, 0.5) });
+  s.x = 400;
+  const size = slothSize(0, world);
+  s.lift = size * 2; s.vLift = 1;              // well above the ground
+  const onGround = createLeaf(400 + size / 2, world.groundLine - size / 2, world, LEAF_ART, { rng: seq(0.5) });
+  const inAir = createLeaf(400 + size / 2, world.groundLine - size / 2 - s.lift, world, LEAF_ART, { rng: seq(0.5) });
+  const leaves = [onGround, inAir];
+  eatLeaves([s], leaves, world);
+  assert.equal(s.eaten, 1);
+  assert.deepEqual(leaves, [onGround]);
 });
 
 test('leaf config stays sane', () => {

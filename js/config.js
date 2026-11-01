@@ -19,7 +19,7 @@ export const SCENE = {
 };
 
 export const SLOTH = {
-  frames: 24,           // frames in the sprite sheet (checked against img/manifest.json)
+  frames: 24,           // frames in the sprite sheet (checked against img/assets.json)
   baseSize: 12,         // a brand-new sloth, in art px (square sprite)
   maxSize: 56,          // size cap
   capLeaves: 40,        // leaves needed to reach the cap
@@ -30,6 +30,11 @@ export const SLOTH = {
   minFps: 6,            // animation rate is derived from roll speed,
   maxFps: 14,           //   clamped so it never looks frozen or frantic
   rollContact: 0.92,    // effective rolling circumference = pi * size * this
+  // Clicking a sloth makes it hop: a small parabola with its frame frozen.
+  jumpHeightBase: 14,   // art px of hop height for a size-0 sloth...
+  jumpHeightPerSize: 0.3, // ...plus this much per art px of size
+  jumpGravity: 220,     // art px / s^2
+  jumpSpeedBoost: 1.6,  // horizontal speed multiplier while airborne
 };
 
 export const LEAF = {
@@ -43,6 +48,12 @@ export const LEAF = {
   maxTilt: 0.35,        // radians, tilts into the direction of travel
   hitRadius: 0.25,      // fraction of drawn size
   maxLeaves: 150,
+};
+
+export const SOUND = {
+  jump: { url: 'audio/jump.wav', volume: 1 },
+  crunch: { url: 'audio/crunch.wav', volume: 0.5 }, // the sample is far louder than jump.wav
+  pitchSemitones: 2,    // every play is shifted by a random amount within +/- this
 };
 
 export const PARTICLE = {

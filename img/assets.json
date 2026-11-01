@@ -52,5 +52,13 @@
     "width": 16,
     "height": 16,
     "box": [1, 3, 15, 14]
+  },
+  "audio": {
+    "crunch": {
+      "file": "crunch.wav"
+    },
+    "jump": {
+      "file": "jump.wav"
+    }
   }
 }

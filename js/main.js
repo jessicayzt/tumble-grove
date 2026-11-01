@@ -7,10 +7,12 @@
 
 import {
   computeWorld, createSloth, resetSloth, stepSloth, slothRect, slothFrame, sortForDraw,
-  createLeaf, stepLeaf, eatLeaves, trimLeaves, rescaleSloth, rescaleLeaf,
-  spawnParticles, stepParticles,
+  jumpSloth, hitTestSloth, createLeaf, stepLeaf, eatLeaves, trimLeaves, rescaleSloth,
+  rescaleLeaf, spawnParticles, stepParticles,
 } from './sim.js';
 import { drawBackground } from './scene.js';
+import { createSoundBank } from './audio.js';
+import { SOUND } from './config.js';
 import { createStore, mergeStates, clampCount, newId, MIN_SLOTHS, MAX_SLOTHS } from './storage.js';
 
 // The sprite sheet shows the sloth tumbling to the LEFT (its face travels
@@ -53,7 +55,7 @@ async function sliceFrames(sheet, info) {
 
 async function main() {
   const [manifest, back, middle, tiles, sheet, leafImg] = await Promise.all([
-    fetch('img/manifest.json').then((r) => r.json()),
+    fetch('img/assets.json').then((r) => r.json()),
     loadImage('img/back.png'),
     loadImage('img/middle.png'),
     loadImage('img/tiles.png'),
@@ -68,6 +70,10 @@ async function main() {
   const bgCtx = bg.getContext('2d');
   const fgCtx = fg.getContext('2d');
   const store = createStore();
+  const sounds = createSoundBank({
+    jump: { url: SOUND.jump.url, volume: SOUND.jump.volume, pitchSemitones: SOUND.pitchSemitones },
+    crunch: { url: SOUND.crunch.url, volume: SOUND.crunch.volume, pitchSemitones: SOUND.pitchSemitones },
+  });
 
   let world = null;
   let sloths = [];
@@ -152,19 +158,28 @@ async function main() {
 
   fg.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || !world) return;
+    sounds.unlock(); // any click counts as the gesture Chrome needs for audio
     const { x, y } = devicePoint(e);
+    const sloth = hitTestSloth(sloths, x, y, world);
+    if (sloth) {
+      if (jumpSloth(sloth, world)) sounds.play('jump'); // a click on a sloth is a poke, not a leaf
+      return;
+    }
     if (y >= world.groundLine) return; // only the air above the ground drops leaves
     leaves.push(createLeaf(x, y, world, leafArt));
     trimLeaves(leaves);
   });
 
-  let cursorInAir = true;
+  let cursor = 'crosshair';
   fg.addEventListener('pointermove', (e) => {
     if (!world) return;
-    const inAir = devicePoint(e).y < world.groundLine;
-    if (inAir !== cursorInAir) {
-      cursorInAir = inAir;
-      fg.style.cursor = inAir ? 'crosshair' : 'default';
+    const { x, y } = devicePoint(e);
+    const next = hitTestSloth(sloths, x, y, world) ? 'pointer'
+      : y < world.groundLine ? 'crosshair'
+      : 'default';
+    if (next !== cursor) {
+      cursor = next;
+      fg.style.cursor = next;
     }
   });
 
@@ -208,10 +223,10 @@ async function main() {
   }
 
   function drawSloth(ctx, sloth) {
-    const { x, size } = slothRect(sloth, world);
+    const { x, y, size } = slothRect(sloth, world);
     const sz = Math.max(1, Math.round(size));
     const dx = Math.round(x);
-    const dy = world.groundLine - sz; // sprite bottom on the ground line
+    const dy = Math.round(y + size) - sz; // sprite bottom on the ground line (or mid-hop)
     const frame = frames[slothFrame(sloth)];
     const downscaling = sz < manifest.sloth.frameWidth;
     ctx.imageSmoothingEnabled = downscaling;
@@ -251,7 +266,10 @@ async function main() {
     for (const { leaf } of meals) {
       particles.push(...spawnParticles(leaf.x + leaf.w / 2, leaf.y + leaf.h / 2, world));
     }
-    if (meals.length) persist();
+    if (meals.length) {
+      sounds.play('crunch'); // one crunch per frame, however many leaves went down
+      persist();
+    }
     stepParticles(particles, dt, world);
   }
 

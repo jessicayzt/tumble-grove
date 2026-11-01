@@ -80,6 +80,8 @@ export function createSloth(record, world, { rng = Math.random, frames = SLOTH.f
     speedMul: 1 + (hash01(record.id) * 2 - 1) * SLOTH.speedJitter,
     frameTime: rng() * frames, // random starting frame
     frames,
+    lift: 0,   // height above the ground line (device px) while hopping
+    vLift: 0,  // vertical speed, positive = up (device px / s)
   };
   const size = slothSize(sloth.eaten, world);
   sloth.x = rng() * Math.max(0, world.w - size);
@@ -104,12 +106,58 @@ export function rescaleSloth(sloth, oldWorld, newWorld) {
   const oldRange = Math.max(1, oldWorld.w - oldSize);
   const newRange = Math.max(0, newWorld.w - newSize);
   sloth.x = Math.min(1, Math.max(0, sloth.x / oldRange)) * newRange;
+  const k = newWorld.scale / oldWorld.scale;
+  sloth.lift *= k;
+  sloth.vLift *= k;
+}
+
+export function isAirborne(sloth) {
+  return sloth.lift > 0 || sloth.vLift > 0;
+}
+
+/**
+ * Launch a hop. The height depends a little on size; the frame freezes while
+ * the sloth is in the air (see stepSloth). A sloth already in the air cannot
+ * be launched again; returns whether a hop started.
+ */
+export function jumpSloth(sloth, world) {
+  if (isAirborne(sloth)) return false;
+  const art = slothSizeArt(sloth.eaten);
+  const height = SLOTH.jumpHeightBase + SLOTH.jumpHeightPerSize * art;
+  sloth.vLift = Math.sqrt(2 * SLOTH.jumpGravity * height) * world.scale;
+  return true;
+}
+
+/**
+ * Front-most grounded sloth (smallest drawn last) whose sprite box contains
+ * (x, y). Airborne sloths are ignored, so a click on one falls through to
+ * whatever is behind it, or drops a leaf.
+ */
+export function hitTestSloth(sloths, x, y, world) {
+  const frontToBack = sortForDraw(sloths).reverse();
+  for (const sloth of frontToBack) {
+    if (isAirborne(sloth)) continue;
+    const r = slothRect(sloth, world);
+    if (x >= r.x && x <= r.x + r.size && y >= r.y && y <= r.y + r.size) return sloth;
+  }
+  return null;
 }
 
 export function stepSloth(sloth, dt, world) {
   const size = slothSize(sloth.eaten, world);
-  const speed = slothSpeed(sloth, world);
+  const airborne = isAirborne(sloth);
+  const speed = slothSpeed(sloth, world) * (airborne ? SLOTH.jumpSpeedBoost : 1);
   sloth.x += sloth.dir * speed * dt;
+
+  if (airborne) {
+    // Parabolic hop; landing snaps back onto the ground line.
+    sloth.lift += sloth.vLift * dt;
+    sloth.vLift -= SLOTH.jumpGravity * world.scale * dt;
+    if (sloth.lift <= 0) {
+      sloth.lift = 0;
+      sloth.vLift = 0;
+    }
+  }
 
   const maxX = world.w - size;
   if (maxX <= 0) {
@@ -123,6 +171,8 @@ export function stepSloth(sloth, dt, world) {
   }
 
   // Animation rate follows the roll: one full turn per circumference.
+  // The frame is frozen for the whole hop (the edge flip still mirrors it).
+  if (airborne) return;
   const circumference = Math.PI * size * SLOTH.rollContact;
   const fps = Math.min(SLOTH.maxFps, Math.max(SLOTH.minFps, (24 * speed) / circumference));
   sloth.frameTime = (sloth.frameTime + fps * dt) % sloth.frames;
@@ -132,10 +182,10 @@ export function slothFrame(sloth) {
   return Math.floor(sloth.frameTime) % sloth.frames;
 }
 
-/** Drawing rectangle: bottom of the sprite sits on the ground line. */
+/** Drawing rectangle: bottom of the sprite sits on the ground line, minus any hop. */
 export function slothRect(sloth, world) {
   const size = slothSize(sloth.eaten, world);
-  return { x: sloth.x, y: world.groundLine - size, size };
+  return { x: sloth.x, y: world.groundLine - size - sloth.lift, size };
 }
 
 /** Bigger sloths are drawn first (further back); smaller ones in front. */
@@ -227,7 +277,7 @@ export function eatLeaves(sloths, leaves, world) {
     for (const sloth of order) {
       const size = slothSize(sloth.eaten, world);
       const cx = sloth.x + size / 2;
-      const cy = world.groundLine - size / 2;
+      const cy = world.groundLine - size / 2 - sloth.lift; // follows the hop
       const r = size * SLOTH.bodyRadius;
       const dx = lx - cx;
       const dy = ly - cy;

@@ -4,8 +4,9 @@
   "version": "1.0.0",
   "description": "A whimsical pixel art forest where sloths roll around.",
   "icons": {
-    "128": "icons/icon.png"
+    "128": "icons/icon128.png"
   },
+  "homepage_url": "https://github.com/jessicayzt/tumble-grove",
   "permissions": ["storage"],
   "chrome_url_overrides": {
     "newtab": "newtab.html"
