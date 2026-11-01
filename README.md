@@ -102,7 +102,8 @@ After editing files, hit the reload icon on the extension's card in
 python3 tools/build_assets.py   # if any art or audio changed
 node --test tests/
 python3 tools/package.py        # -> dist/tumble-grove-<version>.zip (runtime files only)
-python3 tools/store_assets.py   # -> store/*.png listing images (optional, from the game art)
+python3 tools/store_assets.py   # -> store/*.png mock-up listing images (never overwrites existing ones)
+python3 tools/store_assets.py --fit capture.png   # real screenshot -> store/screenshot-1280x800.png
 ```
 
 1. Bump `"version"` in `manifest.json`; the store refuses a version that is not

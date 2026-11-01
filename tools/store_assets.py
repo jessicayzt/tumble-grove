@@ -11,11 +11,21 @@ The scene is composed exactly like js/scene.js + js/sim.js (bottom-anchored
 integer scale, A-B-B-A-B ground blocks, ground line 4 art px below the grass
 edge) and populated with sloths and leaves. They are mock-ups in the sense
 that no browser was involved, so swap in real screenshots whenever you have
-them. Needs Pillow.
+them: files that already exist in store/ are left alone unless you pass
+--force, so a real screenshot saved there is never overwritten.
+
+    python3 tools/store_assets.py [--force]
+    python3 tools/store_assets.py --fit path/to/capture.png
+        Resize a real capture to 1280x800 (exact 16:10 captures scale,
+        anything else is centre-cropped first) and save it flat (no alpha)
+        as store/screenshot-1280x800.png.
+
+Needs Pillow.
 """
 import math
 import pathlib
 import shutil
+import sys
 
 from PIL import Image
 
@@ -150,20 +160,52 @@ def marquee(art):
     return c
 
 
-def main():
+def fit_screenshot(capture, size=(1280, 800)):
+    """Turn a real capture (e.g. a 2560x1600 Retina shot) into a store screenshot."""
+    src = Image.open(capture).convert("RGBA")
+    flat = Image.new("RGB", src.size, (34, 34, 0))
+    flat.paste(src, mask=src.split()[3])
+    target = size[0] / size[1]
+    if abs(flat.width / flat.height - target) > 1e-3:
+        # Centre-crop to 16:10 before scaling so nothing is squashed.
+        if flat.width / flat.height > target:
+            w = round(flat.height * target)
+            x0 = (flat.width - w) // 2
+            flat = flat.crop((x0, 0, x0 + w, flat.height))
+        else:
+            h = round(flat.width / target)
+            y0 = (flat.height - h) // 2
+            flat = flat.crop((0, y0, flat.width, y0 + h))
+    exact = flat.width % size[0] == 0 and flat.width // size[0] == flat.height // size[1]
+    out = flat.resize(size, Image.BOX if exact else Image.LANCZOS)
+    STORE.mkdir(exist_ok=True)
+    out.save(STORE / "screenshot-1280x800.png", optimize=True)
+    print(f"store/screenshot-1280x800.png: {out.width}x{out.height} from {src.width}x{src.height}")
+
+
+def main(argv):
+    if "--fit" in argv:
+        fit_screenshot(argv[argv.index("--fit") + 1])
+        return
+    force = "--force" in argv
     STORE.mkdir(exist_ok=True)
     art = Art()
     outputs = {
-        "screenshot-1280x800.png": screenshot(art),
-        "promo-small-440x280.png": small_tile(art),
-        "promo-marquee-1400x560.png": marquee(art),
+        "screenshot-1280x800.png": screenshot,
+        "promo-small-440x280.png": small_tile,
+        "promo-marquee-1400x560.png": marquee,
     }
-    for name, image in outputs.items():
-        image.convert("RGB").save(STORE / name, optimize=True)  # 24-bit, no alpha
+    for name, render in outputs.items():
+        path = STORE / name
+        if path.exists() and not force:
+            print(f"store/{name}: kept (pass --force to regenerate the mock-up)")
+            continue
+        image = render(art)
+        image.convert("RGB").save(path, optimize=True)  # 24-bit, no alpha
         print(f"store/{name}: {image.width}x{image.height}")
     shutil.copyfile(ROOT / "icons" / "icon128.png", STORE / "icon128.png")
     print("store/icon128.png: 128x128")
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

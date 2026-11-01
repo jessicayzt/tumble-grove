@@ -42,9 +42,11 @@ Each upload needs a higher `"version"` in `manifest.json` than the one on the st
 
 **Store icon (required):** `store/icon128.png` (128x128)
 
-**Screenshots (at least one required, 1280x800):** `store/screenshot-1280x800.png`
-Replace or add real screenshots when convenient: open a new tab, size the
-window to 1280x800 (DevTools device toolbar makes this exact) and capture it.
+**Screenshots (at least one required, exactly 1280x800 or 640x400):**
+`store/screenshot-1280x800.png` is a real capture of the extension. Retina
+captures come out at 2x (2560x1600) and the store rejects them as-is; run
+`python3 tools/store_assets.py --fit <capture.png>` to scale a capture down
+to a flat 1280x800 PNG in place.
 
 **Small promo tile (optional, 440x280):** `store/promo-small-440x280.png`
 
